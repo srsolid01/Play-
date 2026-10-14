@@ -1,13 +1,12 @@
 
 import "./App.css";
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 import { PlayModule } from "./PlayModule";
 import {
     useAppDispatch,
     useAppSelector,
     bootFile,
     bootRemoteGame,
-    init,
 } from "./Actions";
 
 function Stats() {
@@ -16,45 +15,47 @@ function Stats() {
     useEffect(() => {
         if (!PlayModule) return;
 
-        const timer = setInterval(() => {
+        const timer = window.setInterval(() => {
             const frames = PlayModule.getFrames();
             PlayModule.clearStats();
             setFps(frames);
         }, 1000);
 
-        return () => clearInterval(timer);
+        return () => window.clearInterval(timer);
     }, []);
 
-    return <span className="stats">{fps} f/s</span>;
+    return <span className="stats">{fps} FPS</span>;
 }
 
 function App() {
     const state = useAppSelector((state) => state.play);
     const dispatch = useAppDispatch();
     const [starting, setStarting] = useState(false);
-
-    useEffect(() => {
-        dispatch(init());
-    }, [dispatch]);
+    const [errorMessage, setErrorMessage] = useState("");
 
     const handlePlay = async () => {
         setStarting(true);
+        setErrorMessage("");
 
         try {
             await dispatch(bootRemoteGame()).unwrap();
         } catch (error) {
-            console.error("Falha ao iniciar God Hand:", error);
+            console.error("Erro ao iniciar God Hand:", error);
+            setErrorMessage(
+                typeof error === "string"
+                    ? error
+                    : "Não foi possível iniciar o jogo. Verifique o console e a compilação."
+            );
         } finally {
             setStarting(false);
         }
     };
 
-    const handleChange = (
-        event: React.ChangeEvent<HTMLInputElement>
-    ) => {
+    const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
 
         if (file) {
+            setErrorMessage("");
             dispatch(bootFile(file));
         }
     };
@@ -62,7 +63,7 @@ function App() {
     return (
         <main className="god-hand-app">
             <h1>GOD HAND WEB</h1>
-            <p>Emulador de God Hand para navegador</p>
+            <p>Jogue God Hand diretamente no navegador.</p>
 
             <button
                 type="button"
@@ -72,10 +73,16 @@ function App() {
                 {starting ? "INICIANDO..." : "JOGAR GOD HAND"}
             </button>
 
-            <p>Status: {state.value}</p>
+            <p className="status">Status: {state.value}</p>
+
+            {errorMessage && (
+                <p className="error" role="alert">
+                    {errorMessage}
+                </p>
+            )}
 
             <details>
-                <summary>Carregar arquivo local</summary>
+                <summary>Carregar jogo do computador</summary>
                 <input
                     type="file"
                     accept=".iso,.bin,.chd,.elf"
@@ -83,10 +90,12 @@ function App() {
                 />
             </details>
 
-            <Stats />
+            <div className="emulator-stats">
+                <Stats />
+            </div>
 
             <span className="version">
-                {`Version: ${process.env.REACT_APP_VERSION}`}
+                Version: {process.env.REACT_APP_VERSION}
             </span>
         </main>
     );
