@@ -35,6 +35,11 @@ jobs:
             -DBUILD_PSFPLAYER=ON \
             -DUSE_QT=OFF
 
+      - name: Remover opcao antiga do Emscripten
+        run: |
+          grep -RIl -- '-sUSE_ES6_IMPORT_META=0' build_cmake/build \
+            | xargs -r sed -i 's/-sUSE_ES6_IMPORT_META=0//g'
+
       - name: Compilar emulador
         run: |
           cmake --build build_cmake/build \
