@@ -1,49 +1,61 @@
+
 import { configureStore, createAsyncThunk, createReducer } from "@reduxjs/toolkit";
 import { TypedUseSelectorHook, useDispatch, useSelector } from "react-redux";
-import { PlayModule, initPlayModule } from './PlayModule';
+import { PlayModule, initPlayModule } from "./PlayModule";
 
 export type AudioState = {
-    value: string,
+    value: string;
 };
 
-let initialState : AudioState = {
+const initialState: AudioState = {
     value: "unknown",
 };
 
-export const init = createAsyncThunk<void>('init', 
+const GOD_HAND_URL =
+    "https://pub-72fd1c2aa262458dba56c80dfee3f5c5.r2.dev/God%20Hand.iso";
+
+const GOD_HAND_SIZE = 1567686656;
+
+export const init = createAsyncThunk<void>("init", async () => {
+    await initPlayModule();
+});
+
+export const bootRemoteGame = createAsyncThunk<void>(
+    "bootRemoteGame",
     async () => {
         await initPlayModule();
+
+        PlayModule.discImageDevice.setRemote(
+            GOD_HAND_URL,
+            GOD_HAND_SIZE
+        );
+
+        PlayModule.bootDiscImage("God Hand.iso");
     }
 );
 
-export const bootFile = createAsyncThunk<void, File>('bootFile',
-    async (file : File, thunkAPI) => {
+export const bootFile = createAsyncThunk<void, File>(
+    "bootFile",
+    async (file: File, thunkAPI) => {
         const fileName = file.name;
-        const fileDotPos = fileName.lastIndexOf('.');
-        if(fileDotPos === -1) {
-            console.log("File name must have an extension.");
-            thunkAPI.rejectWithValue(null);
-            return;
+        const fileDotPos = fileName.lastIndexOf(".");
+
+        if (fileDotPos === -1) {
+            return thunkAPI.rejectWithValue("O arquivo precisa ter extensão.");
         }
-        const fileExtension = fileName.substring(fileDotPos);
-        if(fileExtension === ".elf") {
-            let url = URL.createObjectURL(file);
-            let blob = await fetch(url).then(response => {
-                if(!response.ok) {
-                    return null;
-                } else {
-                    return response.blob();
-                }
-            });
-            if(blob === null) {
-                thunkAPI.rejectWithValue(null);
-                return;
+
+        const fileExtension = fileName.substring(fileDotPos).toLowerCase();
+
+        if (fileExtension === ".elf") {
+            const data = new Uint8Array(await file.arrayBuffer());
+            const stream = PlayModule.FS.open(fileName, "w+");
+
+            try {
+                PlayModule.FS.write(stream, data, 0, data.length, 0);
+            } finally {
+                PlayModule.FS.close(stream);
             }
-            let data = new Uint8Array(await blob.arrayBuffer());
-            let stream = PlayModule.FS.open(fileName, "w+");
-            PlayModule.FS.write(stream, data, 0, data.length, 0);
-            PlayModule.FS.close(stream);
-            URL.revokeObjectURL(url);
+
             PlayModule.bootElf(fileName);
         } else {
             PlayModule.discImageDevice.setFile(file);
@@ -52,25 +64,30 @@ export const bootFile = createAsyncThunk<void, File>('bootFile',
     }
 );
 
-const reducer = createReducer(initialState, (builder) => (
+const reducer = createReducer(initialState, (builder) => {
     builder
-        .addCase(init.fulfilled, (state, action) => {
-            console.log("init");
+        .addCase(init.fulfilled, (state) => {
             state.value = "initialized";
-            return state;
         })
-        .addCase(bootFile.fulfilled, (state, action) => {
+        .addCase(bootRemoteGame.pending, (state) => {
+            state.value = "loading";
+        })
+        .addCase(bootRemoteGame.fulfilled, (state) => {
             state.value = "loaded";
-            return state;
+        })
+        .addCase(bootRemoteGame.rejected, (state, action) => {
+            state.value = `loading failed: ${action.error.message}`;
+        })
+        .addCase(bootFile.fulfilled, (state) => {
+            state.value = "loaded";
         })
         .addCase(bootFile.rejected, (state, action) => {
             state.value = `loading failed: ${action.error.message}`;
-            return state;
-        })
-));
+        });
+});
 
 export const store = configureStore({
-    reducer: { play: reducer }
+    reducer: { play: reducer },
 });
 
 export type RootState = ReturnType<typeof store.getState>;
