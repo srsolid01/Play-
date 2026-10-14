@@ -1,4 +1,4 @@
-```yaml
+
 name: Build GOD HAND WEB
 
 on:
@@ -10,7 +10,9 @@ permissions:
 jobs:
   build-web:
     runs-on: ubuntu-latest
-
+    steps:
+      - name: Testar workflow
+        run: echo "Workflow reconhecido corretamente"
     steps:
       - name: Baixar codigo com submodulos
         uses: actions/checkout@v4
