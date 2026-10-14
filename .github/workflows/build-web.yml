@@ -17,8 +17,11 @@ jobs:
         with:
           submodules: recursive
 
+      
       - name: Instalar Emscripten
         uses: emscripten-core/setup-emsdk@v15
+        with:
+          version: 3.1.64
 
       - name: Verificar arquivos do projeto
         shell: bash
