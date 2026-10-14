@@ -1,7 +1,7 @@
-yaml
+
 name: Build GOD HAND WEB
 
-'on':
+on:
   workflow_dispatch:
 
 permissions:
@@ -24,24 +24,12 @@ jobs:
         shell: bash
         run: |
           set -eu
-
-          test -f CMakeLists.txt || {
-            echo "ERRO: CMakeLists.txt nao encontrado na raiz."
-            exit 1
-          }
-
-          test -f js/play_browser/package.json || {
-            echo "ERRO: package.json da interface React nao encontrado."
-            exit 1
-          }
-
-          echo "Arquivos do projeto encontrados."
+          test -f CMakeLists.txt
+          test -f js/play_browser/package.json
 
       - name: Configurar compilacao
         shell: bash
         run: |
-          set -eu
-
           emcmake cmake -S . -B build_cmake/build \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_TESTS=OFF \
@@ -49,59 +37,20 @@ jobs:
             -DBUILD_PSFPLAYER=ON \
             -DUSE_QT=OFF
 
-      - name: Corrigir opcao antiga do Emscripten
-        shell: bash
-        run: |
-          set -eu
-
-          if [ -d build_cmake/build ]; then
-            grep -RIl \
-              --include='*.cmake' \
-              --include='*.make' \
-              --include='build.ninja' \
-              --include='link.txt' \
-              -- '-sUSE_ES6_IMPORT_META=0' \
-              build_cmake/build 2>/dev/null |
-            while IFS= read -r file; do
-              [ -n "$file" ] || continue
-              sed -i 's/-sUSE_ES6_IMPORT_META=0//g' "$file"
-            done || true
-          fi
-
-          echo "Verificacao concluida."
-
       - name: Compilar emulador
         shell: bash
         run: |
-          set -eu
-
-          cmake --build build_cmake/build \
-            --config Release \
-            --parallel 2
+          cmake --build build_cmake/build --config Release --parallel 2
 
       - name: Localizar arquivos compilados
         shell: bash
         run: |
           set -eu
-
-          echo "Procurando Play.js e Play.wasm..."
-
-          find build_cmake/build -type f \
-            \( -name 'Play.js' -o -name 'Play.wasm' \) \
-            -print
-
           JS_FILE="$(find build_cmake/build -type f -name 'Play.js' -print -quit)"
           WASM_FILE="$(find build_cmake/build -type f -name 'Play.wasm' -print -quit)"
 
-          if [ -z "$JS_FILE" ]; then
-            echo "ERRO: Play.js nao foi gerado."
-            exit 1
-          fi
-
-          if [ -z "$WASM_FILE" ]; then
-            echo "ERRO: Play.wasm nao foi gerado."
-            exit 1
-          fi
+          test -n "$JS_FILE" || { echo "Play.js nao foi gerado"; exit 1; }
+          test -n "$WASM_FILE" || { echo "Play.wasm nao foi gerado"; exit 1; }
 
           echo "PLAY_JS=$JS_FILE" >> "$GITHUB_ENV"
           echo "PLAY_WASM=$WASM_FILE" >> "$GITHUB_ENV"
@@ -110,22 +59,12 @@ jobs:
         shell: bash
         run: |
           set -eu
-
-          mkdir -p js/play_browser/src
-          mkdir -p js/play_browser/public
+          mkdir -p js/play_browser/src js/play_browser/public
 
           cp "$PLAY_JS" js/play_browser/src/Play.js
           cp "$PLAY_WASM" js/play_browser/src/Play.wasm
-
           cp "$PLAY_JS" js/play_browser/public/Play.js
           cp "$PLAY_WASM" js/play_browser/public/Play.wasm
-
-          test -s js/play_browser/src/Play.js
-          test -s js/play_browser/src/Play.wasm
-          test -s js/play_browser/public/Play.js
-          test -s js/play_browser/public/Play.wasm
-
-          echo "Arquivos preparados."
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -142,27 +81,13 @@ jobs:
         working-directory: js/play_browser
         run: npm run build
 
-      - name: Verificar e preparar site final
+      - name: Preparar site final
         shell: bash
         run: |
           set -eu
-
-          test -s js/play_browser/build/index.html || {
-            echo "ERRO: index.html nao foi gerado."
-            exit 1
-          }
-
-          cp js/play_browser/public/Play.js \
-            js/play_browser/build/Play.js
-
-          cp js/play_browser/public/Play.wasm \
-            js/play_browser/build/Play.wasm
-
-          test -s js/play_browser/build/Play.js
-          test -s js/play_browser/build/Play.wasm
           test -s js/play_browser/build/index.html
-
-          echo "Site final preparado."
+          cp js/play_browser/public/Play.js js/play_browser/build/Play.js
+          cp js/play_browser/public/Play.wasm js/play_browser/build/Play.wasm
 
       - name: Guardar site compilado
         uses: actions/upload-artifact@v4
@@ -171,4 +96,3 @@ jobs:
           path: js/play_browser/build/
           if-no-files-found: error
           retention-days: 7
-```
