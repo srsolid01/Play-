@@ -1,3 +1,4 @@
+```yaml
 name: Build GOD HAND WEB
 
 on:
@@ -9,9 +10,7 @@ permissions:
 jobs:
   build-web:
     runs-on: ubuntu-latest
-    steps:
-      - name: Testar workflow
-        run: echo "Workflow reconhecido corretamente"
+
     steps:
       - name: Baixar codigo com submodulos
         uses: actions/checkout@v4
@@ -69,7 +68,7 @@ jobs:
             done || true
           fi
 
-          echo "Verificacao da opcao antiga concluida."
+          echo "Verificacao concluida."
 
       - name: Compilar emulador
         shell: bash
@@ -115,11 +114,9 @@ jobs:
           mkdir -p js/play_browser/src
           mkdir -p js/play_browser/public
 
-          # O React precisa encontrar o WASM importado pelo Play.js.
           cp "$PLAY_JS" js/play_browser/src/Play.js
           cp "$PLAY_WASM" js/play_browser/src/Play.wasm
 
-          # Disponibiliza tambem os arquivos como recursos publicos.
           cp "$PLAY_JS" js/play_browser/public/Play.js
           cp "$PLAY_WASM" js/play_browser/public/Play.wasm
 
@@ -128,7 +125,7 @@ jobs:
           test -s js/play_browser/public/Play.js
           test -s js/play_browser/public/Play.wasm
 
-          echo "Arquivos do emulador preparados."
+          echo "Arquivos preparados."
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -175,4 +172,3 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 ```
- 
