@@ -1,50 +1,95 @@
-import './App.css';
-import { ChangeEvent, useState, useEffect } from 'react';
-import { PlayModule } from './PlayModule';
-import { useAppDispatch, useAppSelector, bootFile } from "./Actions";
+
+import "./App.css";
+import { useState, useEffect } from "react";
+import { PlayModule } from "./PlayModule";
+import {
+    useAppDispatch,
+    useAppSelector,
+    bootFile,
+    bootRemoteGame,
+    init,
+} from "./Actions";
 
 function Stats() {
-  const [stats, setStats] = useState({ fps: 0 });
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const frames = PlayModule.getFrames();
-      PlayModule.clearStats();
-      setStats({ fps: frames }); 
-    }, 1000);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [stats]);
-  return (
-    <span className="stats">{stats.fps} f/s</span>
-  )
+    const [fps, setFps] = useState(0);
+
+    useEffect(() => {
+        if (!PlayModule) return;
+
+        const timer = setInterval(() => {
+            const frames = PlayModule.getFrames();
+            PlayModule.clearStats();
+            setFps(frames);
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, []);
+
+    return <span className="stats">{fps} f/s</span>;
 }
 
 function App() {
-  const state = useAppSelector((state) => state.play);
-  const dispatch = useAppDispatch();
-  const handleChange = function(event : ChangeEvent<HTMLInputElement>) {
-    if(event.target && event.target.files && event.target.files.length !== 0) {
-      let file = event.target.files[0]; 
-      dispatch(bootFile(file));
-    }
-  }
-  console.log(state.value);
-  if(PlayModule === null) {
+    const state = useAppSelector((state) => state.play);
+    const dispatch = useAppDispatch();
+    const [starting, setStarting] = useState(false);
+
+    useEffect(() => {
+        dispatch(init());
+    }, [dispatch]);
+
+    const handlePlay = async () => {
+        setStarting(true);
+
+        try {
+            await dispatch(bootRemoteGame()).unwrap();
+        } catch (error) {
+            console.error("Falha ao iniciar God Hand:", error);
+        } finally {
+            setStarting(false);
+        }
+    };
+
+    const handleChange = (
+        event: React.ChangeEvent<HTMLInputElement>
+    ) => {
+        const file = event.target.files?.[0];
+
+        if (file) {
+            dispatch(bootFile(file));
+        }
+    };
+
     return (
-      <div>Loading...</div>
+        <main className="god-hand-app">
+            <h1>GOD HAND WEB</h1>
+            <p>Emulador de God Hand para navegador</p>
+
+            <button
+                type="button"
+                onClick={handlePlay}
+                disabled={starting || state.value === "loading"}
+            >
+                {starting ? "INICIANDO..." : "JOGAR GOD HAND"}
+            </button>
+
+            <p>Status: {state.value}</p>
+
+            <details>
+                <summary>Carregar arquivo local</summary>
+                <input
+                    type="file"
+                    accept=".iso,.bin,.chd,.elf"
+                    onChange={handleChange}
+                />
+            </details>
+
+            <Stats />
+
+            <span className="version">
+                {`Version: ${process.env.REACT_APP_VERSION}`}
+            </span>
+        </main>
     );
-  } else {
-    return (
-      <div>
-        <input type="file" onChange={handleChange}/>
-        <Stats />
-        <span className="version">
-          {`Version: ${process.env.REACT_APP_VERSION}`}
-        </span>
-      </div>
-    );
-  }
 }
 
 export default App;
