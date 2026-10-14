@@ -1,0 +1,62 @@
+
+name: Build GOD HAND WEB Emulator
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar codigo com submodulos
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Instalar Emscripten
+        uses: emscripten-core/setup-emsdk@v15
+
+      - name: Conferir ferramentas
+        run: |
+          emcc -v
+          cmake --version
+          node --version
+          npm --version
+
+      - name: Configurar compilacao WebAssembly
+        run: |
+          emcmake cmake -S . -B build_cmake/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTS=OFF \
+            -DBUILD_PLAY=ON \
+            -DBUILD_PSFPLAYER=ON \
+            -DUSE_QT=OFF
+
+      - name: Compilar emulador
+        run: |
+          cmake --build build_cmake/build \
+            --config Release --parallel 2
+
+      - name: Preparar arquivos web
+        run: |
+          mkdir -p js/play_browser/src
+          mkdir -p js/play_browser/public
+          cp build_cmake/build/Source/ui_js/Play.js \
+            js/play_browser/src/Play.js
+          cp build_cmake/build/Source/ui_js/Play.js \
+            js/play_browser/public/Play.js
+          cp build_cmake/build/Source/ui_js/Play.wasm \
+            js/play_browser/public/Play.wasm
+
+      - name: Guardar resultado da compilacao
+        uses: actions/upload-artifact@v4
+        with:
+          name: god-hand-web-emulator
+          path: |
+            js/play_browser/src/Play.js
+            js/play_browser/public/Play.js
+            js/play_browser/public/Play.wasm
+          if-no-files-found: error
