@@ -1,158 +1,21 @@
 
-name: Build GOD HAND WEB
-
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-jobs:
-  build-web:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Baixar codigo com submodulos
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Instalar Emscripten
-        uses: emscripten-core/setup-emsdk@v15
-
-      - name: Configurar compilacao
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          emcmake cmake -S . -B build_cmake/build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTS=OFF \
-            -DBUILD_PLAY=ON \
-            -DBUILD_PSFPLAYER=ON \
-            -DUSE_QT=OFF
-
       - name: Corrigir opcao antiga do Emscripten
         shell: bash
         run: |
-          set -euo pipefail
+          set -eu
 
           if [ -d build_cmake/build ]; then
-            grep -RIl -- '-sUSE_ES6_IMPORT_META=0' \
-              build_cmake/build \
+            grep -RIl \
               --include='*.cmake' \
               --include='*.make' \
               --include='build.ninja' \
               --include='link.txt' \
-              | xargs -r sed -i \
-                's/-sUSE_ES6_IMPORT_META=0//g'
+              -- '-sUSE_ES6_IMPORT_META=0' \
+              build_cmake/build 2>/dev/null \
+              | while IFS= read -r file; do
+                  [ -n "$file" ] || continue
+                  sed -i 's/-sUSE_ES6_IMPORT_META=0//g' "$file"
+                done || true
           fi
 
-      - name: Compilar emulador
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          cmake --build build_cmake/build \
-            --config Release \
-            --parallel 2
-
-      - name: Verificar e preparar arquivos do emulador
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "Procurando Play.js e Play.wasm..."
-
-          find build_cmake/build -type f \
-            \( -name 'Play.js' \
-            -o -name 'Play.wasm' \
-            -o -name 'Play.worker.js' \) \
-            -print
-
-          SRC="build_cmake/build/Source/ui_js"
-          APP="js/play_browser"
-
-          if [ ! -s "$SRC/Play.js" ]; then
-            echo "::error::Play.js nao encontrado em $SRC"
-            exit 1
-          fi
-
-          if [ ! -s "$SRC/Play.wasm" ]; then
-            echo "::error::Play.wasm nao encontrado em $SRC"
-            echo "Verifique a saida da compilacao do Emscripten."
-            exit 1
-          fi
-
-          mkdir -p "$APP/public"
-
-          cp "$SRC/Play.js" "$APP/src/Play.js"
-          cp "$SRC/Play.js" "$APP/public/Play.js"
-          cp "$SRC/Play.wasm" "$APP/public/Play.wasm"
-
-          if [ -f "$SRC/Play.worker.js" ]; then
-            cp "$SRC/Play.worker.js" \
-              "$APP/public/Play.worker.js"
-          fi
-
-          echo "Arquivos do emulador preparados."
-
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: js/play_browser/package-lock.json
-
-      - name: Instalar dependencias React
-        working-directory: js/play_browser
-        run: npm ci
-
-      - name: Verificar arquivos antes do React
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          test -s js/play_browser/src/Play.js
-          test -s js/play_browser/public/Play.js
-          test -s js/play_browser/public/Play.wasm
-
-          echo "Arquivos encontrados:"
-          ls -lh js/play_browser/src/Play.js
-          ls -lh js/play_browser/public/Play.js
-          ls -lh js/play_browser/public/Play.wasm
-
-      - name: Compilar interface React
-        working-directory: js/play_browser
-        run: npm run build
-
-      - name: Incluir arquivos do emulador no site
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p js/play_browser/build
-
-          cp js/play_browser/public/Play.js \
-            js/play_browser/build/Play.js
-
-          cp js/play_browser/public/Play.wasm \
-            js/play_browser/build/Play.wasm
-
-          if [ -f js/play_browser/public/Play.worker.js ]; then
-            cp js/play_browser/public/Play.worker.js \
-              js/play_browser/build/Play.worker.js
-          fi
-
-          test -s js/play_browser/build/index.html
-          test -s js/play_browser/build/Play.js
-          test -s js/play_browser/build/Play.wasm
-
-          echo "Site compilado com sucesso."
-
-      - name: Guardar site compilado
-        uses: actions/upload-artifact@v4
-        with:
-          name: god-hand-web-site
-          path: js/play_browser/build/
-          if-no-files-found: error
+          echo "Verificacao da opcao antiga concluida."
