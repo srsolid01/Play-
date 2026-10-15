@@ -3,6 +3,9 @@ name: Build GOD HAND WEB
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - master
 
 permissions:
   contents: read
@@ -17,7 +20,6 @@ jobs:
         with:
           submodules: recursive
 
-      
       - name: Instalar Emscripten
         uses: emscripten-core/setup-emsdk@v15
         with:
@@ -82,9 +84,11 @@ jobs:
 
       - name: Compilar interface React
         working-directory: js/play_browser
+        env:
+          PUBLIC_URL: /Play-
         run: npm run build
 
-      - name: Preparar site final
+      - name: Verificar site final
         shell: bash
         run: |
           set -eu
@@ -99,3 +103,24 @@ jobs:
           path: js/play_browser/build/
           if-no-files-found: error
           retention-days: 7
+
+      - name: Preparar artefato do GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: js/play_browser/build/
+
+  deploy:
+    needs: build-web
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Publicar GOD HAND WEB
+        id: deployment
+        uses: actions/deploy-pages@v4
