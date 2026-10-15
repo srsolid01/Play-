@@ -31,10 +31,12 @@ jobs:
           set -eu
           test -f CMakeLists.txt
           test -f js/play_browser/package.json
+          echo "Arquivos do projeto encontrados."
 
       - name: Configurar compilacao
         shell: bash
         run: |
+          set -eu
           emcmake cmake -S . -B build_cmake/build \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_TESTS=OFF \
@@ -45,31 +47,65 @@ jobs:
       - name: Compilar emulador
         shell: bash
         run: |
-          cmake --build build_cmake/build --config Release --parallel 2
+          set -eu
+          cmake --build build_cmake/build \
+            --config Release \
+            --parallel 2
 
       - name: Localizar arquivos compilados
         shell: bash
         run: |
           set -eu
+
           JS_FILE="$(find build_cmake/build -type f -name 'Play.js' -print -quit)"
           WASM_FILE="$(find build_cmake/build -type f -name 'Play.wasm' -print -quit)"
+          WORKER_FILE="$(find build_cmake/build -type f -name 'Play.worker.js' -print -quit || true)"
 
-          test -n "$JS_FILE" || { echo "Play.js nao foi gerado"; exit 1; }
-          test -n "$WASM_FILE" || { echo "Play.wasm nao foi gerado"; exit 1; }
+          test -n "$JS_FILE" || {
+            echo "ERRO: Play.js nao foi gerado."
+            exit 1
+          }
+
+          test -n "$WASM_FILE" || {
+            echo "ERRO: Play.wasm nao foi gerado."
+            exit 1
+          }
 
           echo "PLAY_JS=$JS_FILE" >> "$GITHUB_ENV"
           echo "PLAY_WASM=$WASM_FILE" >> "$GITHUB_ENV"
+          echo "PLAY_WORKER=$WORKER_FILE" >> "$GITHUB_ENV"
+
+          if [ -n "$WORKER_FILE" ]; then
+            echo "Play.worker.js encontrado."
+          else
+            echo "Play.worker.js nao foi gerado nesta compilacao."
+          fi
 
       - name: Preparar arquivos do emulador
         shell: bash
         run: |
           set -eu
-          mkdir -p js/play_browser/src js/play_browser/public
+
+          mkdir -p js/play_browser/src
+          mkdir -p js/play_browser/public
 
           cp "$PLAY_JS" js/play_browser/src/Play.js
           cp "$PLAY_WASM" js/play_browser/src/Play.wasm
+
           cp "$PLAY_JS" js/play_browser/public/Play.js
           cp "$PLAY_WASM" js/play_browser/public/Play.wasm
+
+          if [ -n "$PLAY_WORKER" ] && [ -f "$PLAY_WORKER" ]; then
+            cp "$PLAY_WORKER" js/play_browser/public/Play.worker.js
+            cp "$PLAY_WORKER" js/play_browser/src/Play.worker.js
+          fi
+
+          test -s js/play_browser/src/Play.js
+          test -s js/play_browser/src/Play.wasm
+          test -s js/play_browser/public/Play.js
+          test -s js/play_browser/public/Play.wasm
+
+          echo "Arquivos do emulador preparados."
 
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -88,27 +124,33 @@ jobs:
           PUBLIC_URL: /Play-
         run: npm run build
 
-      - name: Verificar site final
+      - name: Preparar site e SharedArrayBuffer
         shell: bash
         run: |
           set -eu
-          test -s js/play_browser/build/index.html
-          cp js/play_browser/public/Play.js js/play_browser/build/Play.js
-          cp js/play_browser/public/Play.wasm js/play_browser/build/Play.wasm
 
-      - name: Ativar SharedArrayBuffer
-        shell: bash
-        run: |
-          set -eu
+          SITE_DIR="js/play_browser/build"
+
+          test -s "$SITE_DIR/index.html"
+
+          cp js/play_browser/public/Play.js "$SITE_DIR/Play.js"
+          cp js/play_browser/public/Play.wasm "$SITE_DIR/Play.wasm"
+
+          if [ -f js/play_browser/public/Play.worker.js ]; then
+            cp js/play_browser/public/Play.worker.js "$SITE_DIR/Play.worker.js"
+          fi
 
           curl -fsSL \
             https://raw.githubusercontent.com/gzuidhof/coi-serviceworker/master/coi-serviceworker.js \
-            -o js/play_browser/build/coi-serviceworker.js
+            -o "$SITE_DIR/coi-serviceworker.js"
 
-          python3 -c 'from pathlib import Path; p=Path("js/play_browser/build/index.html"); s=p.read_text(); tag="<script src=\"./coi-serviceworker.js\"></script>"; assert "</head>" in s, "Tag </head> nao encontrada"; p.write_text(s.replace("</head>", tag + "</head>", 1))'
+          python3 -c 'from pathlib import Path; p=Path("js/play_browser/build/index.html"); s=p.read_text(); tag="<script src=\"./coi-serviceworker.js\"></script>"; assert "</head>" in s, "Tag </head> nao encontrada"; s=s.replace("</head>", tag+"</head>", 1); p.write_text(s)'
 
-          test -s js/play_browser/build/coi-serviceworker.js
-          echo "Service worker preparado."
+          test -s "$SITE_DIR/Play.js"
+          test -s "$SITE_DIR/Play.wasm"
+          test -s "$SITE_DIR/coi-serviceworker.js"
+
+          echo "Site preparado."
 
       - name: Guardar site compilado
         uses: actions/upload-artifact@v4
@@ -126,6 +168,7 @@ jobs:
   deploy:
     needs: build-web
     runs-on: ubuntu-latest
+
     permissions:
       pages: write
       id-token: write
