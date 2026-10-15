@@ -96,6 +96,20 @@ jobs:
           cp js/play_browser/public/Play.js js/play_browser/build/Play.js
           cp js/play_browser/public/Play.wasm js/play_browser/build/Play.wasm
 
+      - name: Ativar SharedArrayBuffer
+        shell: bash
+        run: |
+          set -eu
+
+          curl -fsSL \
+            https://raw.githubusercontent.com/gzuidhof/coi-serviceworker/master/coi-serviceworker.js \
+            -o js/play_browser/build/coi-serviceworker.js
+
+          python3 -c 'from pathlib import Path; p=Path("js/play_browser/build/index.html"); s=p.read_text(); tag="<script src=\"./coi-serviceworker.js\"></script>"; assert "</head>" in s, "Tag </head> nao encontrada"; p.write_text(s.replace("</head>", tag + "</head>", 1))'
+
+          test -s js/play_browser/build/coi-serviceworker.js
+          echo "Service worker preparado."
+
       - name: Guardar site compilado
         uses: actions/upload-artifact@v4
         with:
